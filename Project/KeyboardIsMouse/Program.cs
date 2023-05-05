@@ -8,16 +8,30 @@ namespace KeyboardIsMouse
 {
     internal class Program
     {
-
+        static NotifyIcon trayIcon;
 
         static void Main(string[] args)
         {
-            Console.WriteLine("KeyboardIsMouse 프로그램이 실행 중입니다. 종료하려면 Ctrl+C를 누르십시오.");
-
-            // 사용자 입력을 처리하는 데 사용되는 키보드 후크 이벤트
-            using (var keyboardHook = new KeyboardHook())
+            using (Mutex mutex = new Mutex(false, "KeyboardIsMouse"))
             {
-                Application.Run();
+                if (!mutex.WaitOne(0, false))
+                {
+                    MessageBox.Show("Already Exists", "KeyboardIsMouse", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+                using (var keyboardHook = new KeyboardHook())
+                {
+                    trayIcon = new NotifyIcon
+                    {
+                        Icon = SystemIcons.Application,
+                        Text = "KeyboardIsMouse",
+                        Visible = true
+                    };
+
+                    trayIcon.Click += (sender, args) => Application.Exit();
+
+                    Application.Run();
+                }
             }
         }
     }
@@ -25,7 +39,8 @@ namespace KeyboardIsMouse
     public class KeyboardHook : IDisposable
     {
         private readonly IntPtr _hookID = IntPtr.Zero;
-        public bool _winKeyDown;
+        public bool _winKeyDown = false;
+
 
         public KeyboardHook()
         {
@@ -50,98 +65,72 @@ namespace KeyboardIsMouse
                 int vkCode = Marshal.ReadInt32(lParam);
                 Keys key = (Keys)vkCode;
 
-                if (wParam == (IntPtr)WM_KEYDOWN)
+                if (!_winKeyDown && wParam == (IntPtr)WM_KEYDOWN && key == Keys.RWin)
                 {
-                    if (key == Keys.LWin || key == Keys.RWin)
-                    {
-                        _winKeyDown = true;
-                    }
-                    else if (_winKeyDown)
-                    {
-                        if (ProcessKeyWithWin(key, true))
-                        {
-                            return (IntPtr)1;
-                        }
-                    }
+                    _winKeyDown = true;
                 }
-                else if (wParam == (IntPtr)WM_KEYUP)
+                else if (_winKeyDown && wParam == (IntPtr)WM_KEYUP && key == Keys.RWin)
                 {
-                    if (key == Keys.LWin || key == Keys.RWin)
+                    _winKeyDown = false;
+                }
+
+                else if (wParam != (IntPtr)WM_KEYDOWN)
+                {
+                    goto pass;
+                }
+
+                if (_winKeyDown)
+                {
+
+                    bool pass_key = true;
+                    int moveAmount = 10;
+                    GetCursorPos(out POINT currentPos);
+
+                    if (key == Keys.Home)
                     {
-                        _winKeyDown = false;
+                        SetCursorPos(currentPos.X, currentPos.Y - moveAmount);
                     }
-                    else if (_winKeyDown)
+                    else if (key == Keys.End)
                     {
-                        if (ProcessKeyWithWin(key, false))
-                        {
-                            return (IntPtr)1;
-                        }
+                        SetCursorPos(currentPos.X, currentPos.Y + moveAmount);
+                    }
+                    else if (key == Keys.Delete)
+                    {
+                        SetCursorPos(currentPos.X - moveAmount, currentPos.Y);
+                    }
+                    else if (key == Keys.PageDown)
+                    {
+                        SetCursorPos(currentPos.X + moveAmount, currentPos.Y);
+                    }
+                    else if (key == Keys.RShiftKey)
+                    {
+                        mouse_event(MOUSEEVENTF_LEFTDOWN, (uint)currentPos.X, (uint)currentPos.Y, 0, 0);
+                        mouse_event(MOUSEEVENTF_LEFTUP, (uint)currentPos.X, (uint)currentPos.Y, 0, 0);
+                    }
+                    else if (key == Keys.RControlKey || key == Keys.HanjaMode)
+                    {
+                        mouse_event(MOUSEEVENTF_RIGHTDOWN, (uint)currentPos.X, (uint)currentPos.Y, 0, 0);
+                        mouse_event(MOUSEEVENTF_RIGHTUP, (uint)currentPos.X, (uint)currentPos.Y, 0, 0);
+                    }
+                    else
+                    {
+                        pass_key = false;
+                    }
+
+                    if (pass_key)
+                    {
+                        return (IntPtr)1;
                     }
                 }
 
-                if (wParam == (IntPtr)WM_KEYDOWN || wParam == (IntPtr)WM_KEYUP)
+                if (key == Keys.RWin)
                 {
                     return (IntPtr)1;
                 }
             }
 
+        pass:
             return CallNextHookEx(_hookID, nCode, wParam, lParam);
-        }
-
-        private bool ProcessKeyWithWin(Keys key, bool isKeyDown)
-        {
-            bool keyevent_pass = true;
-
-            if (isKeyDown)
-            {
-                Debug.WriteLine("OnKeyDown");
-
-                int moveAmount = 10; // 한 번에 이동할 픽셀 수를 설정합니다.
-                GetCursorPos(out POINT currentPos);
-
-                if (key == Keys.Home)
-                {
-                    Debug.WriteLine("HomeDown");
-                    SetCursorPos(currentPos.X, currentPos.Y - moveAmount);
-                }
-                else if (key == Keys.End)
-                {
-                    Debug.WriteLine("EndDown");
-                    SetCursorPos(currentPos.X, currentPos.Y + moveAmount);
-                }
-                else if (key == Keys.Delete)
-                {
-                    Debug.WriteLine("DeleteDown");
-                    SetCursorPos(currentPos.X - moveAmount, currentPos.Y);
-                }
-                else if (key == Keys.PageDown)
-                {
-                    Debug.WriteLine("PageDownDown");
-                    SetCursorPos(currentPos.X + moveAmount, currentPos.Y);
-                }
-                else
-                {
-                    keyevent_pass = false;
-                }
-
-                return keyevent_pass;
-            }
-            else
-            {
-                Debug.WriteLine("OnKeyUp");
-                if (key == Keys.RShiftKey)
-                {
-                    Debug.WriteLine("RShiftKeyUP");
-                    GetCursorPos(out POINT currentPos);
-                    mouse_event(MOUSEEVENTF_LEFTUP, (uint)currentPos.X, (uint)currentPos.Y, 0, 0);
-                }
-                else
-                {
-                    keyevent_pass = false;
-                }
-
-                return keyevent_pass;
-            }
         }
 
         ~KeyboardHook()
@@ -179,6 +168,12 @@ namespace KeyboardIsMouse
         private const uint MOUSEEVENTF_LEFTUP = 0x04;
         private const uint MOUSEEVENTF_RIGHTDOWN = 0x08;
         private const uint MOUSEEVENTF_RIGHTUP = 0x10;
+
+
+        [DllImport("user32.dll", SetLastError = true)]
+        static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+
+        const uint KEYEVENTF_KEYUP = 0x0002;
 
         [DllImport("user32.dll")]
         public static extern int SetCursorPos(int x, int y);
