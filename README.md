@@ -1,18 +1,18 @@
 # KeyboardIsMouse
 
-Original functionality of "RWinSystemKey" does not work when KeyboardIsMouse is running
+Original functionality of "HanjaKey" does not work when KeyboardIsMouse is running
 
 ## Use
 
-RWinSystemKey + HOME = Move the mouse cursor up
+HanjaKey+ HOME = Move the mouse cursor up
 
-RWinSystemKey + END = Move the mouse cursor down
+HanjaKey+ END = Move the mouse cursor down
 
-RWinSystemKey + DEL = Move the mouse cursor left
+HanjaKey+ DEL = Move the mouse cursor left
 
-RWinSystemKey + PAGE(DOWN) = Move the mouse cursor right
+HanjaKey+ PAGE(DOWN) = Move the mouse cursor right
 
-RWinSystemKey + RShift = Mouse Left Click
+HanjaKey+ INSERT= Mouse Left Click
 
-RWinSystemKey + RCtrl = Mouse Right Click
+HanjaKey+ PAGE(UP) = Mouse Right Click
 
